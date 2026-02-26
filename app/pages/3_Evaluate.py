@@ -8,7 +8,7 @@ if not cfg["model"] or not cfg["finetune"]:
     st.warning("Pick a model and fine-tune settings first.")
     st.stop()
 
-suite = st.selectbox("Evaluation suite", ["smoke", "full"])
+suite = st.selectbox("Evaluation suite", ["LoRA", "full"])
 metrics = st.multiselect("Metrics", ["accuracy", "latency", "cost"], default=["accuracy"])
 
 if st.button("Save evaluation settings"):

@@ -8,7 +8,7 @@ if not cfg["model"]:
     st.warning("Pick a model first.")
     st.stop()
 
-method = st.selectbox("Method", ["lora", "qlora", "full", "prompt-tuning"])
+method = st.selectbox("Method", ["basic", "LoRA", "QLoRA", "full", "half"])
 dataset = st.text_input("Dataset name/id", value="dataset-v1")
 epochs = st.number_input("Epochs", min_value=1, max_value=50, value=3)
 

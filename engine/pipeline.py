@@ -11,11 +11,13 @@ from engine.runs.run_manager import (
 )
 
 from engine.sft.sft_basic import BasicSFT
+from engine.sft.sft_LoRA import LoRASFT
 from engine.eval.eval_basic import BasicEval
+from engine.eval.eval_LoRA import LoRAEval
 
 SFT_METHODS = {
     "basic" : BasicSFT,
-    "LoRA" : BasicSFT, 
+    "LoRA" : LoRASFT, 
     "QLoRA" : BasicSFT,
     "full" : BasicSFT,
     "half" : BasicSFT,
@@ -23,7 +25,7 @@ SFT_METHODS = {
 
 EVAL_METHODS = {
     "full" : BasicEval,
-    "smoke": BasicEval
+    "LoRA" : LoRAEval,
 }
 
 def select_sft(config: Dict[str, Any]) -> Tuple[str,Any]:
@@ -34,7 +36,7 @@ def select_sft(config: Dict[str, Any]) -> Tuple[str,Any]:
 
 def select_eval(config: Dict[str,Any]) -> Tuple[str,Any]:
     eval = config.get("evaluate") or {}
-    suite = eval.get("suite","smoke")
+    suite = eval.get("suite","full")
     cls = EVAL_METHODS.get(suite, BasicEval)
     return suite, cls()
 

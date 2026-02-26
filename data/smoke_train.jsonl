@@ -1,0 +1,5 @@
+{"device":"demo_device","knobs":{"tile_M":[8,128],"tile_N":[8,128]},"task":"minimise latency","target_json":{"tile_M":32,"tile_N":64}}
+{"device":"demo_device","knobs":{"tile_M":[8,128],"tile_N":[8,128]},"task":"minimise latency","target_json":{"tile_M":64,"tile_N":32}}
+{"device":"demo_device","knobs":{"tile_M":[8,128],"tile_N":[8,128]},"task":"maximise throughput","target_json":{"tile_M":128,"tile_N":64}}
+{"device":"demo_device","knobs":{"tile_M":[8,128],"tile_N":[8,128]},"task":"reduce BRAM use","target_json":{"tile_M":16,"tile_N":16}}
+{"device":"demo_device","knobs":{"tile_M":[8,128],"tile_N":[8,128]},"task":"balance latency and utilisation","target_json":{"tile_M":32,"tile_N":32}}
