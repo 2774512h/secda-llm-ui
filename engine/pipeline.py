@@ -14,18 +14,24 @@ from engine.sft.sft_basic import BasicSFT
 from engine.sft.sft_LoRA import LoRASFT
 from engine.eval.eval_basic import BasicEval
 from engine.eval.eval_LoRA import LoRAEval
+from engine.eval.eval_QLoRA import QLoRAEval
+from engine.sft.sft_QLoRA import QLoRASFT
+from engine.eval.eval_Full import FullEval
+from engine.sft.sft_Full import FullSFT
+from engine.sft.sft_Partial import PartialSFT
 
 SFT_METHODS = {
-    "basic" : BasicSFT,
     "LoRA" : LoRASFT, 
-    "QLoRA" : BasicSFT,
-    "full" : BasicSFT,
-    "half" : BasicSFT,
+    "QLoRA" : QLoRASFT,
+    "Full" : FullSFT,
+    "Partial" : PartialSFT,
 }
 
 EVAL_METHODS = {
-    "full" : BasicEval,
     "LoRA" : LoRAEval,
+    "QLoRA": QLoRAEval,
+    "Full": FullEval,
+    "Partial": FullEval,
 }
 
 def select_sft(config: Dict[str, Any]) -> Tuple[str,Any]:
