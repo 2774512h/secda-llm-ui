@@ -1,7 +1,7 @@
 from __future__ import annotations 
 
 from typing import Any, Dict, Tuple
-
+import json
 from engine.runs.run_manager import (
     RunPaths,
     append_log,
@@ -60,6 +60,15 @@ def run_pipeline(config: Dict[str, Any]) -> RunPaths:
 
         sft_artifact = sft.run(config, run)
         append_log(run, f"[PIPELINE] SFT artifact: {sft_artifact}")
+        model_dir = run.root / "artifacts" / "model"
+        model_dir.mkdir(parents=True, exist_ok=True)
+
+        artifact_path = model_dir / "sft_artifact.json"
+        artifact_path.write_text(
+            json.dumps(sft_artifact, indent = 2),
+            encoding="utf-8"
+        )
+        append_log(run, f"[PIPELINE] Saved SFT artifact: {artifact_path}")
 
         eval_name, evaluator = select_eval(config)
         append_log(run, f"[PIPELINE] Selected eval suite: {eval_name}")

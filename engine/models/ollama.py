@@ -5,6 +5,8 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
+from pathlib import Path
+import subprocess
 
 import httpx
 
@@ -115,3 +117,28 @@ def generate(model_id: str, prompt: str) -> str:
 
     raise RuntimeError("Ollama not available. Install/run Ollama on the machine you're using.")
 
+def create_model(model_name: str, modelfile_path: str) -> str:
+    """"
+    Register a model with Ollam using a Modelfile.
+    Uses the Ollama CLI
+    """
+    modelfile = Path(modelfile_path)
+
+    if not modelfile.exists():
+        raise RuntimeError(f"Modelfile not found: {modelfile_path}")
+
+    if not _cli_available():
+        raise RuntimeError("Ollama CLI not available on PATH")
+    
+    result = subprocess.run(
+        ["ollama", "create", model_name, "-f", str(modelfile)],
+        capture_output=True,
+        text=True,
+    )
+
+    output = (result.stdout or "") + (result.stderr or "")
+
+    if result.returncode != 0:
+        raise RuntimeError(output.strip())
+
+    return output.strip()
