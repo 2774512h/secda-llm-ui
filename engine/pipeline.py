@@ -10,9 +10,7 @@ from engine.runs.run_manager import (
     write_metrics,
 )
 
-from engine.sft.sft_basic import BasicSFT
 from engine.sft.sft_LoRA import LoRASFT
-from engine.eval.eval_basic import BasicEval
 from engine.eval.eval_LoRA import LoRAEval
 from engine.eval.eval_QLoRA import QLoRAEval
 from engine.sft.sft_QLoRA import QLoRASFT
@@ -36,14 +34,14 @@ EVAL_METHODS = {
 
 def select_sft(config: Dict[str, Any]) -> Tuple[str,Any]:
     finetune = config.get("finetune") or {}
-    method = finetune.get("method","basic")
-    cls = SFT_METHODS.get(method, BasicSFT)
+    method = finetune.get("method","LoRA")
+    cls = SFT_METHODS.get(method, LoRASFT)
     return method, cls()
 
-def select_eval(config: Dict[str,Any]) -> Tuple[str,Any]:
-    eval = config.get("evaluate") or {}
-    suite = eval.get("suite","full")
-    cls = EVAL_METHODS.get(suite, BasicEval)
+def select_eval(config: Dict[str, Any]) -> Tuple[str, Any]:
+    eval_cfg = config.get("eval") or {}
+    suite = eval_cfg.get("suite", "Full")
+    cls = EVAL_METHODS.get(suite, LoRAEval)
     return suite, cls()
 
 def run_pipeline(config: Dict[str, Any]) -> RunPaths:

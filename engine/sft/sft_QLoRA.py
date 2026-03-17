@@ -113,6 +113,74 @@ def collate_batch(features: List[Dict[str, torch.Tensor]], pad_token_id: int) ->
 
     return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
 
+def _normalise_target_modules(value: Any) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        parts = [x.strip() for x in value.split(",")]
+        return [x for x in parts if x]
+    if isinstance(value, (list, tuple, set)):
+        return [str(x).strip() for x in value if str(x).strip()]
+    raise ValueError("target_modules must be a list, tuple, set, string, or null")
+
+
+def _available_module_leaf_names(model) -> List[str]:
+    names = set()
+    for name, _ in model.named_modules():
+        if name:
+            names.add(name.split(".")[-1])
+    return sorted(names)
+
+
+def _resolve_target_modules(model, requested: Any) -> List[str]:
+    available = set(_available_module_leaf_names(model))
+    requested_list = _normalise_target_modules(requested)
+
+    if requested_list:
+        matched = [name for name in requested_list if name in available]
+        if matched:
+            return matched
+        common = [
+            name
+            for name in [
+                "q_proj",
+                "k_proj",
+                "v_proj",
+                "o_proj",
+                "c_attn",
+                "c_proj",
+                "query_key_value",
+                "Wqkv",
+                "wqkv",
+                "qkv_proj",
+            ]
+            if name in available
+        ]
+        raise ValueError(
+            f"Target modules {set(requested_list)} not found in the base model. "
+            f"Available module names include: {common if common else _available_module_leaf_names(model)[:40]}"
+        )
+
+    candidate_groups = [
+        ["q_proj", "v_proj"],
+        ["q_proj", "k_proj", "v_proj", "o_proj"],
+        ["c_attn"],
+        ["query_key_value"],
+        ["Wqkv"],
+        ["wqkv"],
+        ["qkv_proj"],
+    ]
+
+    for group in candidate_groups:
+        matched = [name for name in group if name in available]
+        if matched:
+            return matched
+
+    raise ValueError(
+        "Could not auto-detect suitable QLoRA target modules for this base model. "
+        f"Available module names include: {_available_module_leaf_names(model)[:60]}"
+    )
+
 class QLoRASFT:
     def run(self, config: Dict[str, Any], run: RunPaths) -> Dict[str, Any]:
         model_cfg = config.get("model") or {}
@@ -131,15 +199,6 @@ class QLoRASFT:
         alpha = int(qlora_cfg.get("alpha", 16))
         dropout = float(qlora_cfg.get("dropout", 0.05))
         #target_modules = lora_cfg.get("target_modules") or ["q_proj", "v_proj"]
-
-        # IMPORTANT: model-family-specific defaults
-        target_modules = qlora_cfg.get("target_modules")
-        if not target_modules:
-        # GPT-2 family uses c_attn; LLaMA family uses q_proj/v_proj
-            if "gpt2" in base_model.lower():
-                target_modules = ["c_attn"]
-            else:
-                target_modules = ["q_proj", "v_proj"]
 
         epochs = int(finetune.get("epochs", 1))
         lr = float(finetune.get("lr", 2e-4))
@@ -186,9 +245,17 @@ class QLoRASFT:
             device_map="auto",
         )   
 
+        model = AutoModelForCausalLM.from_pretrained(
+            base_model,
+            quantization_config=quant_cfg,
+            device_map="auto",
+        )
+
         model = prepare_model_for_kbit_training(model)
-        
-        # Apply LoRA
+
+        target_modules = _resolve_target_modules(model, qlora_cfg.get("target_modules"))
+        append_log(run, f"[SFT][QLoRA] Using target_modules={target_modules}")
+
         peft_config = LoraConfig(
             r=r,
             lora_alpha=alpha,
@@ -197,6 +264,7 @@ class QLoRASFT:
             task_type="CAUSAL_LM",
             target_modules=target_modules,
         )
+
         model = get_peft_model(model, peft_config)
         model.print_trainable_parameters()
 
