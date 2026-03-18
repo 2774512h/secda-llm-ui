@@ -160,8 +160,8 @@ class LoRAEval:
         model.eval()
 
         max_seq_len = int(eval_cfg.get("max_seq_len", finetune_cfg.get("max_seq_len", 1024)))
-        batch_size = int(eval_cfg.get("batch_size", 4))
-        max_new_tokens = int(eval_cfg.get("max_new_tokens", 256))
+        batch_size = int(eval_cfg.get("batch_size", 1))
+        max_new_tokens = int(eval_cfg.get("max_new_tokens", 64))
 
         append_log(run, f"[EVAL][LoRA] Dataset: {dataset_path} (n={len(examples)})")
 
@@ -193,7 +193,7 @@ class LoRAEval:
             "gen_exact_match": float(gen_metrics["gen_exact_match"]),
             "eval_metrics_path": str(out_dir / "eval_metrics.json"),
             "predictions_path": str(pred_path),
-    }
+        }
 
 
 

@@ -9,11 +9,8 @@ st.info(msg)
 
 models = list_models()
 if not models:
-    st.warning("No ollama models found on this machine.")
-    models = [
-        type("M", (), {"id": "llama3:8b", "display": "llama3:8b (placeholder)"}),
-        type("M", (), {"id": "mistral:7b", "display": "mistral:7b (placeholder)"}),
-    ]
+    st.warning("No Ollama models found on this machine.")
+    st.stop()
 
 cfg = get_config() or {}
 current = cfg.get("model") or {}

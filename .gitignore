@@ -8,3 +8,6 @@ venv/
 /runs/
 /data/raw/dataset/runs/
 *.csv
+app_config.json
+
+app_config.json

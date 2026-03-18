@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import json
 import time
 import subprocess
@@ -97,19 +98,33 @@ def export_to_ollama(
         llama_cpp_convert_script=llama_cpp_convert_script,
     )
 
-    # Make adapter path relative to Modelfile when possible
-    # (Ollama allows relative paths in Modelfile) :contentReference[oaicite:3]{index=3}
-    try:
-        adapter_rel = adapter_path_for_modelfile.relative_to(export_dir)
-    except Exception:
-        adapter_rel = adapter_path_for_modelfile  # fall back to absolute
+    # Stage adapter beside the Modelfile for Ollama.
+    # On Windows, pointing ADAPTER at an external directory can be flaky.
+    staged_adapter_path = None
+
+    if adapter_path_for_modelfile.is_dir():
+        required = ["adapter_config.json", "adapter_model.safetensors"]
+        missing = [name for name in required if not (adapter_path_for_modelfile / name).exists()]
+        if missing:
+            raise RuntimeError(
+                f"Adapter directory is missing required files: {missing} in {adapter_path_for_modelfile}"
+            )
+
+        shutil.copy2(adapter_path_for_modelfile / "adapter_config.json", export_dir / "adapter_config.json")
+        shutil.copy2(adapter_path_for_modelfile / "adapter_model.safetensors", export_dir / "adapter_model.safetensors")
+        staged_adapter_path = "."
+    else:
+        # GGUF adapter file case
+        staged_name = adapter_path_for_modelfile.name
+        shutil.copy2(adapter_path_for_modelfile, export_dir / staged_name)
+        staged_adapter_path = f"./{staged_name}"
 
     modelfile_path = export_dir / "Modelfile"
     modelfile_path.write_text(
         "\n".join(
             [
                 f"FROM {ollama_base_model}",
-                f"ADAPTER {adapter_rel}",
+                f"ADAPTER {staged_adapter_path}",
                 "",
                 "# Optional: keep deterministic-ish defaults for evaluation / RAG",
                 "PARAMETER temperature 0.2",
@@ -143,7 +158,7 @@ def export_to_ollama(
         "export_dir": str(export_dir),
         "modelfile_path": str(modelfile_path),
         "adapter_path_used": str(adapter_path_for_modelfile),
-        "adapter_path_in_modelfile": str(adapter_rel),
+        "adapter_path_in_modelfile": str(staged_adapter_path),
         "adapter_convert_warning": convert_warning,
         "attempted_register": bool(register),
         "ollama_create_output": create_output,

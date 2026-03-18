@@ -26,12 +26,17 @@ with col1:
     st.info(msg)
 
     if st.button("Run", disabled=not ok):
-        with st.spinner("Running pipeline..."):
-            run = run_pipeline(cfg)
+        try:
+            with st.spinner("Running pipeline..."):
+                run = run_pipeline(cfg)
 
-        set_last_run_id(run.run_id)
-        st.success(f"Run completed (or failed): {run.run_id}")
-        st.code(str(run.root))
+            set_last_run_id(run.run_id)
+            st.success(f"Run completed (or failed): {run.run_id}")
+            st.code(str(run.root))
+
+        except Exception as e:
+            st.error("Pipeline crashed")
+            st.exception(e)
 
     # ----------------------------
     # EXPORT SECTION (CENTER AREA)
@@ -72,18 +77,30 @@ with col1:
                 )
 
                 if st.button("Export to Ollama", key="export_button"):
-                    with st.spinner("Exporting..."):
-                        summary = export_to_ollama(
-                                    run_dir=run_dir,
-                                    run_id=last_run_id,
-                                    ollama_new_model_name=model_name,
-                                    ollama_base_model=ollama_base,
-                                    register=register,
-                                    llama_cpp_convert_script=None,  # later: path to convert_lora_to_gguf.py
-                                )
+                    try:
+                        with st.spinner("Exporting..."):
+                            summary = export_to_ollama(
+                                run_dir=run_dir,
+                                run_id=last_run_id,
+                                ollama_new_model_name=model_name,
+                                ollama_base_model=ollama_base,
+                                register=register,
+                                llama_cpp_convert_script=None,
+                            )
 
-                    st.success("Export complete")
-                    st.json(summary)
+                        attempted = summary.get("attempted_register", False)
+                        create_error = summary.get("ollama_create_error")
+
+                        if attempted and create_error:
+                            st.error("Export finished, but Ollama registration failed")
+                        else:
+                            st.success("Export complete")
+
+                        st.json(summary)
+
+                    except Exception as e:
+                        st.error("Export failed")
+                        st.exception(e)
 
 # ---------------------------------------------------
 # RIGHT COLUMN (Config + Latest Run)
