@@ -1,14 +1,16 @@
 import streamlit as st
-from state import get_config, set_section
+
+from app.state import get_config, set_section
 
 st.title("2) Fine-tune")
 
 cfg = get_config()
 if not cfg["model"]:
-    st.warning("Pick a model first.")
+    st.warning("Choose model settings first.")
     st.stop()
 
 current = cfg.get("finetune") or {}
+
 supported_methods = ["LoRA", "QLoRA", "Full", "Partial"]
 
 current_method = current.get("method", "LoRA")
@@ -36,21 +38,25 @@ elif not default_qlora_target_modules:
     default_qlora_target_modules = ""
 
 method = st.selectbox(
-    "Method",
+    "Fine-tuning method",
     supported_methods,
     index=supported_methods.index(current_method) if current_method in supported_methods else 0,
 )
 
-dataset = st.text_input("Dataset path/name/id", value=current_dataset)
+dataset = st.text_input("Dataset path / name / id", value=current_dataset)
 
 st.subheader("Common training settings")
 epochs = st.number_input("Epochs", min_value=1, max_value=50, value=current_epochs)
 lr = st.number_input("Learning rate", min_value=0.0, value=current_lr, format="%.8f")
 batch_size = st.number_input("Batch size", min_value=1, max_value=128, value=current_batch_size)
-max_seq_len = st.number_input("Max sequence length", min_value=64, max_value=32768, value=current_max_seq_len, step=64)
+max_seq_len = st.number_input(
+    "Max sequence length", min_value=64, max_value=32768, value=current_max_seq_len, step=64
+)
 
 if method in ["Full", "Partial"]:
-    grad_accum = st.number_input("Gradient accumulation", min_value=1, max_value=1024, value=current_grad_accum)
+    grad_accum = st.number_input(
+        "Gradient accumulation", min_value=1, max_value=1024, value=current_grad_accum
+    )
 
 if method == "LoRA":
     st.subheader("LoRA settings")
@@ -64,14 +70,16 @@ if method == "LoRA":
         format="%.4f",
     )
     lora_target_modules_raw = st.text_input(
-        "LoRA target modules (comma-separated, leave blank to auto-detect)",
+        "LoRA target modules (comma-separated, blank = auto-detect)",
         value=default_lora_target_modules,
     )
 
 if method == "QLoRA":
     st.subheader("QLoRA settings")
     qlora_r = st.number_input("QLoRA rank (r)", min_value=1, max_value=256, value=int(current_qlora.get("r", 8)))
-    qlora_alpha = st.number_input("QLoRA alpha", min_value=1, max_value=1024, value=int(current_qlora.get("alpha", 16)))
+    qlora_alpha = st.number_input(
+        "QLoRA alpha", min_value=1, max_value=1024, value=int(current_qlora.get("alpha", 16))
+    )
     qlora_dropout = st.number_input(
         "QLoRA dropout",
         min_value=0.0,
@@ -80,7 +88,7 @@ if method == "QLoRA":
         format="%.4f",
     )
     qlora_target_modules_raw = st.text_input(
-        "QLoRA target modules (comma-separated, leave blank to auto-detect)",
+        "QLoRA target modules (comma-separated, blank = auto-detect)",
         value=default_qlora_target_modules,
     )
 
@@ -107,7 +115,7 @@ if method == "QLoRA":
 
 if method == "Full":
     st.subheader("Full fine-tuning settings")
-    st.info("Full fine-tuning updates the whole model and generally needs more memory and compute than LoRA or QLoRA.")
+    st.info("Full fine-tuning updates the whole model and usually needs the most memory and compute.")
 
 if method == "Partial":
     st.subheader("Partial fine-tuning settings")
@@ -172,7 +180,7 @@ if st.button("Save fine-tune settings"):
         }
 
     set_section("finetune", finetune_cfg)
-    st.success("Fine-tune settings saved!")
+    st.success("Fine-tune settings saved.")
 
 st.subheader("Current config")
 st.json(get_config())

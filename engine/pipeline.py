@@ -40,7 +40,7 @@ def select_sft(config: Dict[str, Any]) -> Tuple[str,Any]:
 
 def select_eval(config: Dict[str, Any]) -> Tuple[str, Any]:
     eval_cfg = config.get("eval") or {}
-    suite = eval_cfg.get("suite", "Full")
+    suite = eval_cfg.get("suite", "LoRA")
     cls = EVAL_METHODS.get(suite, LoRAEval)
     return suite, cls()
 

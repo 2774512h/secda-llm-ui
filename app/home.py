@@ -7,10 +7,9 @@ from engine.pipeline import run_pipeline
 
 from engine.export_ollama import export_to_ollama
 
-st.set_page_config(page_title="LLM DSE UI", layout="wide")
-
-st.title("LLM Design Space Exploration UI")
-st.write("Workflow: **Model → Fine-tune → Evaluate**")
+st.set_page_config(page_title="SECDA LLM UI", layout="wide")
+st.title("SECDA LLM Design Space Exploration UI")
+st.write("Workflow: **Model → Fine-tune → Evaluate → Export to Ollama**")
 
 cfg = get_config()
 (ok, msg) = validate_config(cfg)
@@ -22,7 +21,7 @@ col1, col2 = st.columns([2, 1])
 # ---------------------------------------------------
 
 with col1:
-    st.subheader("Run control")
+    st.subheader("Run pipeline")
     st.info(msg)
 
     if st.button("Run", disabled=not ok):
@@ -42,10 +41,12 @@ with col1:
     # EXPORT SECTION (CENTER AREA)
     # ----------------------------
     ollama_base = st.text_input(
-        "Ollama base model (FROM)",
+        "Ollama base model for export (FROM)",
         value="tinyllama:latest",
         key="export_ollama_base",
     )
+
+    st.caption("Use the same Ollama base model family that matches the adapter's training base model.")
     
     last_run_id = get_last_run_id()
 
