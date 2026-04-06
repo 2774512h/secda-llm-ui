@@ -4,12 +4,11 @@ from pathlib import Path
 
 from app.state import get_config, validate_config, set_last_run_id, get_last_run_id
 from engine.pipeline import run_pipeline
-
 from engine.export_ollama import export_to_ollama
 
 st.set_page_config(page_title="SECDA LLM UI", layout="wide")
 st.title("SECDA LLM Design Space Exploration UI")
-st.write("Workflow: **Model → Fine-tune → Evaluate → Export to Ollama**")
+st.write("Workflow: **Model → Fine-tune → Evaluate → Export standalone model to Ollama**")
 
 cfg = get_config()
 (ok, msg) = validate_config(cfg)
@@ -38,16 +37,9 @@ with col1:
             st.exception(e)
 
     # ----------------------------
-    # EXPORT SECTION (CENTER AREA)
+    # EXPORT SECTION
     # ----------------------------
-    ollama_base = st.text_input(
-        "Ollama base model for export (FROM)",
-        value="tinyllama:latest",
-        key="export_ollama_base",
-    )
 
-    st.caption("Use the same Ollama base model family that matches the adapter's training base model.")
-    
     last_run_id = get_last_run_id()
 
     if last_run_id:
@@ -55,8 +47,7 @@ with col1:
         status_path = run_dir / "status.json"
 
         if status_path.exists():
-            status_obj = json.loads(status_path.read_text())
-
+            status_obj = json.loads(status_path.read_text(encoding="utf-8"))
             state = status_obj.get("state") or status_obj.get("status")
 
             if state == "done":
@@ -66,7 +57,7 @@ with col1:
                 default_name = f"dse-{last_run_id}"
 
                 model_name = st.text_input(
-                    "Ollama model name",
+                    "New Ollama model name",
                     value=default_name,
                     key="export_model_name",
                 )
@@ -77,6 +68,8 @@ with col1:
                     key="export_register",
                 )
 
+                st.caption("Default export creates a standalone model first, then registers it in Ollama.")
+
                 if st.button("Export to Ollama", key="export_button"):
                     try:
                         with st.spinner("Exporting..."):
@@ -84,9 +77,7 @@ with col1:
                                 run_dir=run_dir,
                                 run_id=last_run_id,
                                 ollama_new_model_name=model_name,
-                                ollama_base_model=ollama_base,
                                 register=register,
-                                llama_cpp_convert_script=None,
                             )
 
                         attempted = summary.get("attempted_register", False)

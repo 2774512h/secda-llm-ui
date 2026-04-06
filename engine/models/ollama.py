@@ -118,9 +118,9 @@ def generate(model_id: str, prompt: str) -> str:
     raise RuntimeError("Ollama not available. Install/run Ollama on the machine you're using.")
 
 def create_model(model_name: str, modelfile_path: str) -> str:
-    """"
-    Register a model with Ollam using a Modelfile.
-    Uses the Ollama CLI
+    """
+    Register a model with Ollama using a Modelfile.
+    Uses the Ollama CLI.
     """
     modelfile = Path(modelfile_path)
 
@@ -129,11 +129,12 @@ def create_model(model_name: str, modelfile_path: str) -> str:
 
     if not _cli_available():
         raise RuntimeError("Ollama CLI not available on PATH")
-    
+
     result = subprocess.run(
-        ["ollama", "create", model_name, "-f", str(modelfile)],
+        ["ollama", "create", model_name, "-f", modelfile.name],
         capture_output=True,
         text=True,
+        cwd=str(modelfile.parent),
     )
 
     output = (result.stdout or "") + (result.stderr or "")

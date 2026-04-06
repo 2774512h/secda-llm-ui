@@ -3,128 +3,105 @@ from __future__ import annotations
 import shutil
 import json
 import time
-import subprocess
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional
 
 from engine.models.ollama import get_status, create_model
+from engine.models.merge_model import merge_adapter_into_model
 
-def _maybe_convert_adapter_to_gguf(
-    adapter_dir: Path,
+def normalize_model_for_export(
+    *,
+    sft_artifact: Dict[str, Any],
     export_dir: Path,
-    llama_cpp_convert_script: Optional[str],
-) -> Tuple[Path, Optional[str]]:
+) -> Tuple[Path, str, Optional[Dict[str, Any]]]:
     """
-    Best-effort conversion of a PEFT adapter directory to a GGUF adapter using llama.cpp's convert_lora_to_gguf.py.
+    Normalize a training artifact into a standalone full-model directory for export.
 
     Returns:
-      (adapter_path_to_use_in_modelfile, warning_message)
+      (model_dir, normalized_from, normalization_details)
+
+    normalized_from:
+      - "merged_adapter"  -> adapter artifact was merged into a full model
+      - "full_model"      -> artifact already points at a full model directory
     """
-    # If user didn't provide a converter, just use adapter_dir as-is.
-    if not llama_cpp_convert_script:
-        return adapter_dir, (
-            "No llama.cpp convert script provided; using adapter directory directly in Modelfile. "
-            "If Ollama rejects it, provide llama_cpp_convert_script to convert adapter to GGUF."
+    artifact_type = str(sft_artifact.get("artifact_type") or sft_artifact.get("type") or "").strip().lower()
+    method = str(sft_artifact.get("method") or "").strip().lower()
+
+    if artifact_type == "adapter":
+        base_model = sft_artifact.get("base_model")
+        adapter_dir_str = sft_artifact.get("adapter_dir")
+        can_merge = bool(sft_artifact.get("can_merge", False))
+        merge_supported = bool(sft_artifact.get("merge_supported", can_merge))
+
+        if not base_model:
+            raise RuntimeError("Adapter export normalization requires 'base_model' in sft_artifact.json.")
+        if not adapter_dir_str:
+            raise RuntimeError("Adapter export normalization requires 'adapter_dir' in sft_artifact.json.")
+        if not can_merge or not merge_supported:
+            raise RuntimeError(
+                f"Artifact method '{method}' is an adapter, but this run is not marked mergeable."
+            )
+
+        adapter_dir = Path(adapter_dir_str)
+        if not adapter_dir.exists():
+            raise RuntimeError(f"Adapter dir not found: {adapter_dir}")
+
+        merged_model_dir = export_dir / "merged_model"
+
+        merge_result = merge_adapter_into_model(
+            base_model=base_model,
+            adapter_dir=str(adapter_dir),
+            output_dir=str(merged_model_dir),
         )
 
-    script = Path(llama_cpp_convert_script)
-    if not script.exists():
-        return adapter_dir, f"llama_cpp_convert_script not found at {script}; using adapter directory directly."
-
-    # Heuristic: if adapter already contains a .gguf file, prefer it
-    gguf_candidates = list(adapter_dir.glob("*.gguf"))
-    if gguf_candidates:
-        return gguf_candidates[0], None
-
-    # Otherwise, attempt conversion into export_dir/adapter.gguf
-    out_path = export_dir / "adapter.gguf"
-
-    # llama.cpp script usage can vary; this is a best-effort call.
-    # Many setups accept: python convert_lora_to_gguf.py <adapter_dir> --outfile <out>
-    cmd = ["python", str(script), str(adapter_dir), "--outfile", str(out_path)]
-
-    try:
-        cp = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        out = (cp.stdout or "") + (cp.stderr or "")
-        if cp.returncode != 0 or not out_path.exists():
-            return adapter_dir, (
-                "Attempted adapter conversion to GGUF but it failed; using adapter directory directly.\n"
-                f"Command: {' '.join(cmd)}\n"
-                f"Output:\n{out.strip()}"
+        if not merged_model_dir.exists():
+            raise RuntimeError(
+                f"Merge completed but merged model dir was not created: {merged_model_dir}"
             )
-        return out_path, None
-    except Exception as e:
-        return adapter_dir, f"Adapter conversion threw {type(e).__name__}: {e}. Using adapter directory directly."
 
-def export_to_ollama(
-    *,
-    run_dir: Path,
-    run_id: str,
-    ollama_new_model_name: str,
-    ollama_base_model: str,
-    register: bool = True,
-    llama_cpp_convert_script: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Real Ollama export for LoRA runs via Modelfile + ADAPTER.
+        return merged_model_dir, "merged_adapter", {
+            "base_model": base_model,
+            "adapter_dir": str(adapter_dir),
+            "merged_model_dir": str(merged_model_dir),
+            "merge_result": merge_result,
+            "method": method,
+        }
 
-    - Reads runs/<run_id>/artifacts/model/sft_artifact.json (must include base_model + adapter_dir)
-    - Writes runs/<run_id>/artifacts/export_ollama/Modelfile + export_summary.json
-    - Modelfile uses:
-        FROM <ollama_base_model>
-        ADAPTER <adapter path>
-      (ADAPTER path can be relative to Modelfile) :contentReference[oaicite:2]{index=2}
-    - Optionally registers with `ollama create` if Ollama is available.
-    """
-    t0 = time.time()
-    run_dir = Path(run_dir)
+    if artifact_type in {"full_model", "full_model_hf", "partial_full_model"}:
+        candidate_paths = [
+            sft_artifact.get("model_dir"),
+            sft_artifact.get("full_model_dir"),
+            sft_artifact.get("merged_model_dir"),
+        ]
+        model_dir_str = next((p for p in candidate_paths if p), None)
+        if not model_dir_str:
+            raise RuntimeError(
+                "Full-model export requires one of: model_dir, full_model_dir, or merged_model_dir "
+                "in sft_artifact.json."
+            )
 
-    sft_artifact_path = run_dir / "artifacts" / "model" / "sft_artifact.json"
-    if not sft_artifact_path.exists():
-        raise RuntimeError(f"Missing SFT artifact: {sft_artifact_path}")
+        model_dir = Path(model_dir_str)
+        if not model_dir.exists():
+            raise RuntimeError(f"Full model dir not found: {model_dir}")
 
-    sft_artifact = json.loads(sft_artifact_path.read_text(encoding="utf-8"))
-    adapter_dir = Path(sft_artifact.get("adapter_dir", ""))
-    if not adapter_dir.exists():
-        raise RuntimeError(f"Adapter dir not found: {adapter_dir}")
+        return model_dir, "full_model", {
+            "model_dir": str(model_dir),
+            "method": method,
+        }
 
-    export_dir = run_dir / "artifacts" / "export_ollama"
-    export_dir.mkdir(parents=True, exist_ok=True)
-
-    # Convert adapter if needed (best-effort)
-    adapter_path_for_modelfile, convert_warning = _maybe_convert_adapter_to_gguf(
-        adapter_dir=adapter_dir,
-        export_dir=export_dir,
-        llama_cpp_convert_script=llama_cpp_convert_script,
+    raise RuntimeError(
+        f"Unsupported export artifact type: {artifact_type!r}. "
+        "Expected 'adapter', 'full_model', 'full_model_hf', or 'partial_full_model'."
     )
 
-    # Stage adapter beside the Modelfile for Ollama.
-    # On Windows, pointing ADAPTER at an external directory can be flaky.
-    staged_adapter_path = None
-
-    if adapter_path_for_modelfile.is_dir():
-        required = ["adapter_config.json", "adapter_model.safetensors"]
-        missing = [name for name in required if not (adapter_path_for_modelfile / name).exists()]
-        if missing:
-            raise RuntimeError(
-                f"Adapter directory is missing required files: {missing} in {adapter_path_for_modelfile}"
-            )
-
-        shutil.copy2(adapter_path_for_modelfile / "adapter_config.json", export_dir / "adapter_config.json")
-        shutil.copy2(adapter_path_for_modelfile / "adapter_model.safetensors", export_dir / "adapter_model.safetensors")
-        staged_adapter_path = "."
-    else:
-        # GGUF adapter file case
-        staged_name = adapter_path_for_modelfile.name
-        shutil.copy2(adapter_path_for_modelfile, export_dir / staged_name)
-        staged_adapter_path = f"./{staged_name}"
-
-    modelfile_path = export_dir / "Modelfile"
+def write_full_model_modelfile(
+    modelfile_path: Path,
+    model_path: Path,
+) -> None:
     modelfile_path.write_text(
         "\n".join(
             [
-                f"FROM {ollama_base_model}",
-                f"ADAPTER {staged_adapter_path}",
+                f"FROM {model_path.resolve()}",
                 "",
                 "# Optional: keep deterministic-ish defaults for evaluation / RAG",
                 "PARAMETER temperature 0.2",
@@ -134,6 +111,56 @@ def export_to_ollama(
         ),
         encoding="utf-8",
     )
+
+def export_to_ollama(
+    *,
+    run_dir: Path,
+    run_id: str,
+    ollama_new_model_name: str,
+    register: bool = True,
+) -> Dict[str, Any]:
+    """
+    Export a fine-tuned run to Ollama.
+
+    Default export behavior is standalone-model-first:
+    - Adapter artifacts are normalized by merging them into their base model first
+    - Full-model artifacts are exported directly
+
+    Supported paths:
+    - LoRA adapter -> merge -> full model -> Ollama
+    - QLoRA adapter -> merge if supported -> full model -> Ollama
+    - Full fine-tune -> export directly
+    - Partial fine-tune -> export directly if artifact already points to a full model
+    """
+    t0 = time.time()
+    run_dir = Path(run_dir)
+
+    sft_artifact_path = run_dir / "artifacts" / "model" / "sft_artifact.json"
+    if not sft_artifact_path.exists():
+        raise RuntimeError(f"Missing SFT artifact: {sft_artifact_path}")
+
+    sft_artifact = json.loads(sft_artifact_path.read_text(encoding="utf-8"))
+    artifact_type = str(sft_artifact.get("artifact_type") or sft_artifact.get("type") or "").strip().lower()
+    method = str(sft_artifact.get("method") or "").strip().lower()
+
+    export_dir = run_dir / "artifacts" / "export_ollama"
+    if export_dir.exists():
+        shutil.rmtree(export_dir)
+    export_dir.mkdir(parents=True, exist_ok=True)
+
+    modelfile_path = export_dir / "Modelfile"
+
+    model_path_for_modelfile, normalized_from, normalization_details = normalize_model_for_export(
+        sft_artifact=sft_artifact,
+        export_dir=export_dir,
+    )
+
+    write_full_model_modelfile(
+        modelfile_path=modelfile_path,
+        model_path=model_path_for_modelfile,
+    )
+
+    export_mode = "standalone_model"
 
     ok, status_msg = get_status()
 
@@ -151,24 +178,31 @@ def export_to_ollama(
 
     summary = {
         "run_id": run_id,
-        "ollama_base_model": ollama_base_model,
+        "export_mode": export_mode,
+        "artifact_type": artifact_type,
+        "finetune_method": method,
         "ollama_new_model_name": ollama_new_model_name,
         "ollama_status": {"ok": ok, "message": status_msg},
+        "normalized_from": normalized_from,
+        "normalization_details": normalization_details,
         "sft_artifact": sft_artifact,
         "export_dir": str(export_dir),
         "modelfile_path": str(modelfile_path),
-        "adapter_path_used": str(adapter_path_for_modelfile),
-        "adapter_path_in_modelfile": str(staged_adapter_path),
-        "adapter_convert_warning": convert_warning,
+        "model_path_used": str(model_path_for_modelfile) if model_path_for_modelfile else None,
         "attempted_register": bool(register),
         "ollama_create_output": create_output,
         "ollama_create_error": create_error,
         "runtime_s": time.time() - t0,
         "notes": [
-            "This export uses Ollama Modelfile ADAPTER support (base model must match adapter’s training base).",
-            "If registration fails, check base model exists in Ollama and adapter format compatibility.",
-        ],
+            "Default Ollama export is standalone-model-first.",
+            "Adapter artifacts are normalized by merging into the recorded base model before export.",
+            "Full-model artifacts are exported directly using Modelfile FROM <model_dir>.",
+            "QLoRA export depends on whether the artifact is marked merge-supported.",
+        ]
     }
 
-    (export_dir / "export_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    (export_dir / "export_summary.json").write_text(
+        json.dumps(summary, indent=2),
+        encoding="utf-8",
+    )
     return summary

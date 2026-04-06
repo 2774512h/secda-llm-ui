@@ -184,9 +184,9 @@ def _resolve_target_modules(model, requested: Any) -> List[str]:
 class QLoRASFT:
     def run(self, config: Dict[str, Any], run: RunPaths) -> Dict[str, Any]:
         model_cfg = config.get("model") or {}
-        base_model = model_cfg.get("base_model")
+        base_model = model_cfg.get("training_base_model")
         if not base_model:
-            raise ValueError("LoRA requires config.model.base_model (string)")
+            raise ValueError("LoRA requires config.model.training_base_model (string)")
 
         finetune = config.get("finetune") or {}
         qlora_cfg = finetune.get("QLoRA") or {}

@@ -120,7 +120,7 @@ def collate_batch(features: List[Dict[str, torch.Tensor]], pad_token_id: int) ->
 class FullSFT:
     def run(self, config: Dict[str, Any], run: RunPaths) -> Dict[str, Any]:
         model_cfg = config.get("model") or {}
-        base_model = model_cfg.get("base_model")
+        base_model = model_cfg.get("training_base_model")
         if not base_model:
             raise ValueError("Full SFT requires config.model.base_model (string)")
 

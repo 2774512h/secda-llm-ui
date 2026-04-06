@@ -2,7 +2,7 @@ import streamlit as st
 
 from app.state import get_config, set_section
 
-st.title("2) Fine-tune")
+st.title("2) Please select and save your desired finetune settings")
 
 cfg = get_config()
 if not cfg["model"]:

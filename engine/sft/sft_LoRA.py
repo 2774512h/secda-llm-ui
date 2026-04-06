@@ -182,9 +182,9 @@ def _resolve_target_modules(model, requested: Any) -> List[str]:
 class LoRASFT:
     def run(self, config: Dict[str, Any], run: RunPaths) -> Dict[str, Any]:
         model_cfg = config.get("model") or {}
-        base_model = model_cfg.get("base_model")
+        base_model = model_cfg.get("training_base_model")
         if not base_model:
-            raise ValueError("LoRA requires config.model.base_model (string)")
+            raise ValueError("LoRA requires config.model.training_base_model (string)")
 
         finetune = config.get("finetune") or {}
         lora_cfg = finetune.get("LoRA") or {}
@@ -288,9 +288,11 @@ class LoRASFT:
         (model_dir / "training_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
         return {
-            "type": "lora_adapter",
-            "method": "LoRA",
-            "base_model": base_model,
-            "adapter_dir": str(adapter_dir),
-            "summary_path": str(model_dir / "training_summary.json"),
-        }
+                "artifact_type": "adapter",
+                "method": "lora",
+                "base_model": base_model,
+                "adapter_dir": str(adapter_dir),
+                "can_merge": True,
+                "merge_supported": True,
+                "summary_path": str(model_dir / "training_summary.json"),
+            }

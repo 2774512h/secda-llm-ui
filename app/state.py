@@ -9,6 +9,7 @@ DEFAULT_CONFIG = {
     "model": None,
     "finetune": None,
     "eval": None,
+    "tooling": None
 }
 
 
@@ -22,6 +23,8 @@ def _normalize_config(cfg):
         cfg["finetune"] = None
     if "eval" not in cfg:
         cfg["eval"] = None
+    if "tooling" not in cfg:
+        cfg["tooling"] = None
 
     return cfg
 
@@ -64,12 +67,12 @@ def validate_config(config):
     finetune_cfg = config.get("finetune") or {}
     eval_cfg = config.get("eval") or {}
 
-    if not model_cfg.get("name"):
-        return False, "Choose an inference model in the Model page."
+    if not model_cfg.get("training_base_model"):
+        return False, "Please choose a training base model in the Model page."
     if not finetune_cfg.get("method"):
-        return False, "Choose a fine-tuning method and dataset in the Fine-tune page."
+        return False, "Please select and save your finetuning settings in the Fine-tune page."
     if not eval_cfg.get("suite"):
-        return False, "Choose an evaluation suite in the Evaluate page."
+        return False, "Please select and save your evaluation in the Evaluate page."
 
     return True, "Configuration complete and ready to run."
 
